@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>明るさで動かそう</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f7f8f2; --panel:#ffffff; --panel-bd:#dfe3d6;
+    --ink:#1f2633; --sub:#4a5262;
+    --sen:#1f63b5; --senLite:#dde9f8;   /* センサ（入力） */
+    --cpu:#6b3fb0; --cpuLite:#ece3fa;   /* コンピュータ（判断） */
+    --act:#c4541a; --actLite:#fbe3d4;   /* アクチュエータ（動作） */
+    --pcb:#1d7f47; --pcbLite:#d6f0e0;   /* 拡張ボード */
+    --warn:#b8261b; --warnLite:#fbdcd8;
+    --R:#e0261b; --G:#16a34a; --B:#2563eb;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;background:#dfe3d6;color:var(--ink);overflow:hidden;}
+  body{font-family:"Zen Maru Gothic","BIZ UDGothic","Hiragino Maru Gothic ProN",system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+  button{font-family:inherit;cursor:pointer;}
+
+  #viewport{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  #stage{width:1600px;height:900px;position:relative;flex:none;transform-origin:center center;overflow:hidden;box-shadow:0 10px 40px rgba(30,50,20,.18);}
+  .slide{position:absolute;inset:0;padding:52px 80px 70px;display:flex;flex-direction:column;
+    background:radial-gradient(1000px 600px at 95% -10%,rgba(29,127,71,.08),transparent 60%),
+               radial-gradient(900px 600px at -10% 110%,rgba(31,99,181,.08),transparent 60%),var(--bg);
+    opacity:0;visibility:hidden;transition:opacity .45s ease,visibility .45s;}
+  .slide.active{opacity:1;visibility:visible;}
+  .slide.active .pop{animation:pop .6s cubic-bezier(.2,1.3,.4,1) both;}
+  .slide.active .pop:nth-child(2){animation-delay:.08s}
+  .slide.active .pop:nth-child(3){animation-delay:.16s}
+  .slide.active .pop:nth-child(4){animation-delay:.24s}
+  @keyframes pop{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}
+
+  .tag{font-weight:900;font-size:26px;letter-spacing:.12em;color:#fff;background:var(--pcb);
+    display:inline-block;padding:6px 22px;border-radius:999px;align-self:flex-start;}
+  .tag.S{background:var(--sen);} .tag.C{background:var(--cpu);} .tag.A{background:var(--act);} .tag.W{background:var(--warn);}
+  h1{font-size:96px;font-weight:900;line-height:1.12;}
+  h2{font-size:56px;font-weight:900;line-height:1.2;margin:10px 0 22px;}
+  h3{font-size:40px;font-weight:900;line-height:1.3;}
+  p,li{font-size:36px;font-weight:700;line-height:1.5;}
+  .sub{color:var(--sub);}
+  .cS{color:var(--sen)} .cC{color:var(--cpu)} .cA{color:var(--act)} .cP{color:var(--pcb)} .cW{color:var(--warn)}
+  .cR{color:var(--R)} .cG{color:var(--G)} .cB{color:var(--B)}
+  .mark{background:linear-gradient(transparent 58%,#ffd96b 58%);padding:0 4px;}
+
+  .row{display:flex;gap:44px;align-items:center;flex:1;min-height:0;}
+  .col{flex:1;min-width:0;}
+  .illus{border-radius:28px;overflow:hidden;border:3px solid #fff;box-shadow:0 18px 44px rgba(30,50,20,.20);background:#fefaee;}
+  .illus img{display:block;width:100%;height:auto;}
+  .illus.lab{position:relative;}
+  .card{background:var(--panel);border:2px solid var(--panel-bd);border-radius:26px;padding:22px 30px;box-shadow:0 6px 18px rgba(30,50,20,.06);}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+  .icon{font-size:64px;line-height:1;}
+  .kw{display:inline-block;font-weight:900;border-radius:14px;padding:0 14px;}
+  .kw.S{background:var(--senLite);color:var(--sen)} .kw.C{background:var(--cpuLite);color:var(--cpu)}
+  .kw.A{background:var(--actLite);color:var(--act)} .kw.P{background:var(--pcbLite);color:var(--pcb)}
+  .bS{border-top:12px solid var(--sen)} .bC{border-top:12px solid var(--cpu)} .bA{border-top:12px solid var(--act)} .bP{border-top:12px solid var(--pcb)}
+  .ws{position:absolute;right:80px;top:52px;font-size:26px;font-weight:900;color:var(--pcb);background:var(--pcbLite);padding:6px 20px;border-radius:14px;}
+  .test{display:inline-block;font-size:24px;font-weight:900;color:#fff;background:var(--warn);border-radius:10px;padding:2px 12px;vertical-align:middle;letter-spacing:.05em;}
+
+  .step{opacity:0;transform:translateY(16px);transition:opacity .4s,transform .4s;}
+  .step.shown{opacity:1;transform:none;}
+
+  #ui{position:fixed;left:0;right:0;bottom:0;height:6px;background:rgba(0,0,0,.06);z-index:10;}
+  #bar{height:100%;width:0;background:linear-gradient(90deg,var(--sen),var(--cpu),var(--act));transition:width .4s;}
+  .nav{position:fixed;bottom:16px;z-index:11;border:none;width:54px;height:54px;border-radius:50%;
+    background:rgba(31,38,51,.10);color:var(--ink);font-size:24px;font-weight:900;opacity:.6;transition:opacity .2s;}
+  .nav:hover{opacity:1;}
+  #prev{right:150px} #next{right:86px} #fs{right:22px;font-size:20px;}
+  #count{position:fixed;left:24px;bottom:22px;z-index:11;font-size:18px;font-weight:900;color:var(--sub);letter-spacing:.1em;}
+
+  /* 写真へのラベル */
+  .lbl{position:absolute;transform:translate(-50%,-50%);background:rgba(255,255,255,.95);border:3px solid var(--ink);border-radius:14px;padding:2px 14px;font-size:28px;font-weight:900;white-space:nowrap;box-shadow:0 3px 8px rgba(0,0,0,.2);}
+  .ring{position:absolute;border:6px solid #ffd400;border-radius:18px;box-shadow:0 0 0 4px rgba(0,0,0,.35),0 0 24px rgba(255,212,0,.9);}
+
+  /* 流れ図 */
+  .flow{display:flex;align-items:stretch;gap:0;}
+  .flow .f{flex:1;background:#fff;border:3px solid var(--panel-bd);border-radius:24px;padding:18px 14px;text-align:center;}
+  .flow .f h3{font-size:44px;}
+  .flow .f p{font-size:30px;line-height:1.4;}
+  .flow .arr{display:flex;align-items:center;font-size:52px;color:var(--sub);padding:0 10px;font-weight:900;}
+  .num{display:inline-flex;width:50px;height:50px;border-radius:50%;color:#fff;background:var(--pcb);font-size:30px;font-weight:900;align-items:center;justify-content:center;flex:none;}
+  .steps{display:flex;flex-direction:column;gap:14px;}
+  .steps .s{display:flex;gap:18px;align-items:center;background:#fff;border:2px solid var(--panel-bd);border-radius:20px;padding:12px 22px;}
+  .steps .s p{font-size:32px;line-height:1.35;}
+
+  /* MakeCode風ブロック */
+  .blk{display:inline-block;color:#fff;font-size:32px;font-weight:900;border-radius:10px;padding:10px 22px;line-height:1.3;box-shadow:inset 0 -4px 0 rgba(0,0,0,.18);}
+  .blk .v{display:inline-block;background:#fff;color:var(--ink);border-radius:999px;padding:0 16px;margin:0 6px;}
+  .blk.in{background:#d400d4;} .blk.pin{background:#a5280e;} .blk.bas{background:#1e90ff;}
+  .blkwrap{display:flex;flex-direction:column;align-items:flex-start;gap:6px;}
+  .blkwrap .inner{margin-left:44px;display:flex;flex-direction:column;gap:6px;}
+
+  /* 3択クイズ */
+  .opts{display:flex;flex-direction:column;gap:12px;}
+  .opt{border:3px solid var(--panel-bd);background:#fff;color:var(--ink);border-radius:18px;padding:10px 22px;font-size:30px;font-weight:900;text-align:left;}
+  .opt:hover{border-color:var(--sen);}
+  .opt.ok{background:var(--pcbLite);border-color:var(--pcb);color:var(--pcb);}
+  .opt.ok::before{content:"⭕ ";}
+  .opt.ng{background:var(--warnLite);border-color:var(--warn);color:var(--warn);opacity:.75;}
+  .opt.ng::before{content:"✕ ";}
+  .q{font-size:32px;font-weight:900;margin-bottom:10px;line-height:1.35;}
+  .ansbox{background:#fff;border:3px solid var(--pcb);border-radius:22px;padding:14px 24px;font-size:32px;font-weight:900;line-height:1.45;}
+
+  /* 光の三原色 */
+  .mix{position:relative;width:520px;height:480px;background:#0d0f14;border-radius:28px;flex:none;overflow:hidden;}
+  .mix .c{position:absolute;width:260px;height:260px;border-radius:50%;mix-blend-mode:screen;transition:opacity .3s;}
+  .mix .c.off{opacity:0;}
+  .mix .r{background:#ff0000;left:130px;top:60px;} .mix .g{background:#00ff00;left:60px;top:180px;} .mix .b{background:#0000ff;left:200px;top:180px;}
+  .tg{border:none;border-radius:16px;padding:10px 22px;font-size:30px;font-weight:900;color:#fff;box-shadow:0 4px 0 rgba(0,0,0,.25);}
+  .tg.r{background:var(--R)} .tg.g{background:var(--G)} .tg.b{background:var(--B)}
+  .tg.off{opacity:.35;}
+  .sw{display:inline-block;width:40px;height:40px;border-radius:10px;vertical-align:middle;border:2px solid rgba(0,0,0,.2);margin-right:10px;}
+  table.t{width:100%;border-collapse:separate;border-spacing:0 10px;table-layout:fixed;}
+  table.t th{font-size:28px;font-weight:900;color:var(--sub);text-align:center;padding:0 10px;}
+  table.t td{background:#fff;font-size:32px;font-weight:900;padding:12px 16px;text-align:center;border-top:2px solid var(--panel-bd);border-bottom:2px solid var(--panel-bd);}
+  table.t td:first-child{border-left:2px solid var(--panel-bd);border-radius:18px 0 0 18px;text-align:left;}
+  table.t td:last-child{border-right:2px solid var(--panel-bd);border-radius:0 18px 18px 0;}
+  .btn{border:none;border-radius:20px;padding:12px 28px;font-size:30px;font-weight:900;background:var(--pcb);color:#fff;box-shadow:0 4px 0 #0f5a30;}
+  .btn:active{transform:translateY(3px);box-shadow:none;}
+  .url{font-family:Consolas,monospace;font-size:28px;font-weight:700;background:#eef1ea;border-radius:10px;padding:4px 12px;word-break:break-all;}
+  .qlist{display:flex;flex-direction:column;gap:11px;}
+  .qr{display:flex;gap:18px;align-items:center;background:#fff;border:2px solid var(--panel-bd);border-radius:16px;padding:7px 22px;font-size:32px;font-weight:700;}
+  .qn{flex:none;background:var(--warn);color:#fff;border-radius:10px;padding:0 12px;font-weight:900;font-size:28px;}
+  .qa{display:inline-block;min-width:110px;text-align:center;border-bottom:4px solid var(--warn);font-weight:900;margin:0 8px;}
+  .qa.step{opacity:1;transform:none;color:transparent;}
+  .qa.step.shown{color:var(--warn);}
+
+  /* ===== この時間で追加 ===== */
+  .numline{position:relative;height:150px;margin:10px 30px 0;}
+  .numline .bar{position:absolute;left:0;right:0;top:56px;height:34px;border-radius:17px;background:linear-gradient(90deg,#1b1d24,#fff6c8);border:3px solid #9aa08f;}
+  .numline .tick{position:absolute;top:100px;transform:translateX(-50%);font-size:28px;font-weight:900;color:var(--sub);}
+  .numline .pin{position:absolute;top:0;transform:translateX(-50%);text-align:center;font-size:28px;font-weight:900;white-space:nowrap;}
+  .numline .pin::after{content:"";display:block;margin:4px auto 0;width:6px;height:40px;background:currentColor;border-radius:3px;}
+  .numline .th{position:absolute;top:40px;bottom:40px;width:8px;transform:translateX(-50%);background:var(--cpu);border-radius:4px;box-shadow:0 0 0 4px rgba(107,63,176,.25);}
+  .blk.lg{background:#00a4a6;} .blk.cmp{background:#4fc3c4;border-radius:0;clip-path:polygon(14px 0,calc(100% - 14px) 0,100% 50%,calc(100% - 14px) 100%,14px 100%,0 50%);padding:6px 26px;font-size:30px;box-shadow:none;} .blk.in2{background:#d400d4;border-radius:999px;padding:2px 16px;font-size:30px;}
+  .blk.loop{background:#1e90ff;}
+  .blkbody{border-left:44px solid #00a4a6;padding:8px 0 8px 10px;display:flex;flex-direction:column;gap:6px;}
+  .blkbody.b{border-left-color:#1e90ff;}
+  .blkfoot{background:#00a4a6;width:150px;height:26px;border-radius:0 0 10px 10px;}
+  .blkfoot.b{background:#1e90ff;}
+  /* シミュレーター */
+  .sim{display:flex;gap:40px;flex:1;min-height:0;align-items:stretch;}
+  .simpanel{flex:1;display:flex;flex-direction:column;gap:22px;justify-content:center;}
+  .slider{display:flex;align-items:center;gap:18px;}
+  .slider label{font-size:32px;font-weight:900;width:220px;flex:none;}
+  .slider input{flex:1;height:40px;accent-color:var(--sen);}
+  .slider input.thr{accent-color:var(--cpu);}
+  .slider output{font-size:40px;font-weight:900;width:110px;text-align:right;flex:none;font-variant-numeric:tabular-nums;}
+  .cond{font-size:40px;font-weight:900;text-align:center;padding:14px;border-radius:22px;background:#fff;border:3px solid var(--panel-bd);}
+  .modes{display:flex;gap:14px;}
+  .modes button{flex:1;border:3px solid var(--panel-bd);background:#fff;border-radius:16px;padding:10px;font-size:28px;font-weight:900;color:var(--ink);}
+  .modes button[aria-pressed="true"]{border-color:var(--cpu);background:var(--cpuLite);color:var(--cpu);}
+  .motor{width:340px;flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:#fff;border:3px solid var(--panel-bd);border-radius:28px;}
+  .motor .disc{width:190px;height:190px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#e8e8e8,#9a9a9a 70%,#777);border:6px solid #666;position:relative;}
+  .motor .disc::after{content:"";position:absolute;left:50%;top:50%;width:70px;height:70px;margin:-35px;border-radius:50%;background:#555;}
+  .motor.on .disc{animation:buzz .07s linear infinite;border-color:var(--act);box-shadow:0 0 0 10px rgba(196,84,26,.18);}
+  @keyframes buzz{0%{transform:translate(-5px,2px)}25%{transform:translate(4px,-3px)}50%{transform:translate(-3px,-2px)}75%{transform:translate(5px,3px)}100%{transform:translate(-5px,2px)}}
+  .motor .st{font-size:44px;font-weight:900;}
+  .motor .p0{font-size:30px;font-weight:900;color:var(--sub);}
+  .simview{width:250px;height:250px;border-radius:24px;flex:none;border:3px solid var(--panel-bd);transition:background .2s;display:flex;align-items:center;justify-content:center;font-size:96px;}
+  @media (prefers-reduced-motion: reduce){.motor.on .disc{animation:none !important;}}
+  /* フローチャート */
+  svg.fc text{font-family:inherit;font-weight:900;}
+</style>
+</head>
+<body>
+<!-- 50分の目安：導入5分(1-4)／光センサとアナログ・デジタル5分(5-6)／実習① 明るさをはかる8分(7-8)／しきい値・フローチャート8分(9-10)／実習② 自動で動かす12分(11-13)／チャレンジ4分(14)／片付け・確認テスト・まとめ・ふりかえり8分(16-19)。15は発展：時間があるときだけ（なければ次回の導入に）。42分になったらS16へ進む -->
+<div id="viewport"><div id="stage">
+
+<!-- 01 タイトル -->
+<section class="slide" data-title="タイトル">
+  <div class="row" style="gap:40px;">
+    <div class="col" style="flex:.92;">
+      <span class="tag pop">計測・制御の技術</span>
+      <p class="sub pop" style="font-size:32px;margin-top:22px;">技術・家庭科〔技術分野〕3年</p>
+      <h1 class="pop" style="font-size:84px;margin:14px 0 24px;"><span class="cS">明るさ</span>で<br>動かそう</h1>
+      <p class="pop" style="font-size:40px;">光センサで<span class="mark">はかって</span>、<br>暗くなったら<span class="mark">自動で</span>ブルブル</p>
+    </div>
+    <div class="col illus pop" style="flex:1.08;"><img src="img/hero.jpg" alt="手でマイコンの表面をおおって暗くすると、つないだ振動モータがふるえる"></div>
+  </div>
+</section>
+
+<!-- 02 ゴール -->
+<section class="slide" data-title="きょうのゴール">
+  <span class="tag">GOAL</span>
+  <h2>きょうのゴール 🎯</h2>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:26px;padding-bottom:30px;">
+    <div class="card step" style="padding:26px 40px;"><p style="font-size:42px;">① micro:bit の<span class="kw S">光センサ</span>で、明るさを<span class="mark">数値</span>ではかれる</p></div>
+    <div class="card step" style="padding:26px 40px;"><p style="font-size:42px;">② <span class="kw C">しきい値</span>を決めて、「もし〜なら」で<br>　<span class="kw A">振動モータ</span>を<span class="mark">自動で</span>動かせる</p></div>
+    <div class="card step" style="padding:26px 40px;"><p style="font-size:42px;">③ 処理の流れを<span class="mark">フローチャート</span>で表せる</p></div>
+  </div>
+</section>
+
+<!-- 03 前回との違い -->
+<section class="slide" data-title="前回とのちがい">
+  <span class="tag">ふりかえり</span>
+  <h2>前回は「人が」動かした。きょうは…？</h2>
+  <div class="grid2" style="flex:1;align-content:center;">
+    <div class="card" style="padding:30px 36px;">
+      <h3 class="sub" style="margin-bottom:14px;">前回</h3>
+      <p style="font-size:36px;line-height:1.7;">🔘 <b>ボタンA</b>を押したら<br>　→ 振動モータがブルブル<br>🎚 <b>アプリ</b>のフェーダーで<br>　→ 3色LEDの色を変えた</p>
+      <p style="font-size:34px;margin-top:14px;" class="cW">決めていたのは <b>人</b></p>
+    </div>
+    <div class="card step bS" style="padding:30px 36px;">
+      <h3 class="cS" style="margin-bottom:14px;">きょう</h3>
+      <p style="font-size:36px;line-height:1.7;">👀 <b class="cS">センサ</b>が明るさをはかり<br>🧠 <b class="cC">micro:bit</b>が判断して<br>💪 <b class="cA">振動モータ</b>を動かす</p>
+      <p style="font-size:34px;margin-top:14px;" class="cP">だれも押さなくても <span class="mark">自動で</span> 動く</p>
+    </div>
+  </div>
+</section>
+
+<!-- 04 身の回りの例 -->
+<section class="slide" data-title="明るさで動くもの">
+  <span class="tag">考えよう</span>
+  <h2>だれもスイッチを押していないのに…</h2>
+  <div class="row" style="align-items:flex-start;">
+    <div class="col illus" style="flex:1.2;"><img src="img/auto-light.jpg" alt="夕方、街灯と車のライトがひとりでに点く"></div>
+    <div class="col" style="flex:.8;display:flex;flex-direction:column;gap:18px;">
+      <div class="card step" style="padding:16px 26px;"><p style="font-size:33px;">💡 <b>街灯</b><br>暗くなると点き、朝に消える</p></div>
+      <div class="card step" style="padding:16px 26px;"><p style="font-size:33px;">🚗 <b>車のオートライト</b><br>トンネルに入ると点く</p></div>
+      <div class="card step" style="padding:16px 26px;"><p style="font-size:33px;">📱 <b>スマホの画面</b><br>周りに合わせて明るさが変わる</p></div>
+      <div class="card step" style="background:#fffaf0;border-color:#e8d7b0;padding:16px 26px;"><p style="font-size:31px;">どれも <b class="cS">明るさをはかる</b><br>センサが入っている</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 micro:bitの光センサ -->
+<section class="slide" data-title="micro:bitの光センサ">
+  <span class="tag S">センサ</span>
+  <h2>micro:bit の光センサは<span class="mark">どこ</span>にある？ <span class="test">テストに出る</span></h2>
+  <div class="row" style="align-items:center;gap:50px;">
+    <div style="flex:none;">
+      <svg viewBox="0 0 520 440" width="560" role="img" aria-label="micro:bitの表。5×5のLEDの部分が光センサをかねている">
+        <rect x="20" y="20" width="480" height="400" rx="34" fill="#22252b"/>
+        <circle cx="90" cy="220" r="34" fill="#3a3e46" stroke="#777" stroke-width="4"/><circle cx="430" cy="220" r="34" fill="#3a3e46" stroke="#777" stroke-width="4"/>
+        <text x="90" y="232" font-size="34" font-weight="900" fill="#ccc" text-anchor="middle">A</text><text x="430" y="232" font-size="34" font-weight="900" fill="#ccc" text-anchor="middle">B</text>
+        <rect x="146" y="96" width="228" height="248" rx="16" fill="none" stroke="#ffd400" stroke-width="7"/>
+        <g fill="#ff4a3d">
+          <rect x="166" y="116" width="20" height="28" rx="4"/><rect x="208" y="116" width="20" height="28" rx="4"/><rect x="250" y="116" width="20" height="28" rx="4"/><rect x="292" y="116" width="20" height="28" rx="4"/><rect x="334" y="116" width="20" height="28" rx="4"/>
+          <rect x="166" y="162" width="20" height="28" rx="4"/><rect x="208" y="162" width="20" height="28" rx="4"/><rect x="250" y="162" width="20" height="28" rx="4"/><rect x="292" y="162" width="20" height="28" rx="4"/><rect x="334" y="162" width="20" height="28" rx="4"/>
+          <rect x="166" y="208" width="20" height="28" rx="4"/><rect x="208" y="208" width="20" height="28" rx="4"/><rect x="250" y="208" width="20" height="28" rx="4"/><rect x="292" y="208" width="20" height="28" rx="4"/><rect x="334" y="208" width="20" height="28" rx="4"/>
+          <rect x="166" y="254" width="20" height="28" rx="4"/><rect x="208" y="254" width="20" height="28" rx="4"/><rect x="250" y="254" width="20" height="28" rx="4"/><rect x="292" y="254" width="20" height="28" rx="4"/><rect x="334" y="254" width="20" height="28" rx="4"/>
+          <rect x="166" y="300" width="20" height="28" rx="4"/><rect x="208" y="300" width="20" height="28" rx="4"/><rect x="250" y="300" width="20" height="28" rx="4"/><rect x="292" y="300" width="20" height="28" rx="4"/><rect x="334" y="300" width="20" height="28" rx="4"/>
+        </g>
+        <text x="260" y="78" font-size="30" font-weight="900" fill="#ffd400" text-anchor="middle">ここが光センサ</text>
+      </svg>
+    </div>
+    <div class="col" style="display:flex;flex-direction:column;gap:20px;">
+      <div class="card bS" style="padding:20px 30px;"><p style="font-size:36px;">表の <span class="mark">5×5のLED表示</span>の<br>一部が光センサをかねている</p></div>
+      <div class="card step" style="padding:20px 30px;"><p style="font-size:32px;">LEDは光を受けると、ごくわずかな<br>電流が流れる性質がある。<br>これを使って明るさをはかる</p></div>
+      <div class="card step" style="padding:20px 30px;border-left:12px solid var(--warn);"><p style="font-size:32px;">はかるときは<b>表側</b>に光を当てる・<b>手で表をおおう</b><br><span class="sub" style="font-size:28px;">裏側をおおっても値はほとんど変わらない</span></p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 アナログとデジタル -->
+<section class="slide" data-title="はかる値と出す値">
+  <span class="tag">しくみ</span>
+  <h2>はかる値は<span class="cS">256段階</span>、出す値は<span class="cA">2通り</span> <span class="test">テストに出る</span></h2>
+  <div class="grid2" style="flex:1;align-content:center;">
+    <div class="card bS" style="padding:26px 34px;">
+      <h3 class="cS" style="margin-bottom:12px;">入力：明るさ</h3>
+      <p style="font-size:34px;">明るさは<b>少しずつ</b>変わる量<br>→ micro:bit が <span class="mark">0〜255</span> の<br>　数値に変えて読みとる</p>
+      <div style="margin-top:20px;height:46px;border-radius:12px;background:linear-gradient(90deg,#14161b,#fff6c8);border:3px solid #9aa08f;"></div>
+      <div style="display:flex;justify-content:space-between;font-size:28px;font-weight:900;margin-top:6px;"><span>0 暗い</span><span>255 明るい</span></div>
+    </div>
+    <div class="card bA" style="padding:26px 34px;">
+      <h3 class="cA" style="margin-bottom:12px;">出力：振動モータ</h3>
+      <p style="font-size:34px;">「デジタルで出力する」は<br><span class="mark">0 か 1</span> の 2通りだけ<br>→ モータは OFF か ON</p>
+      <div style="display:flex;gap:16px;margin-top:20px;">
+        <div style="flex:1;height:70px;border-radius:12px;background:#e9ebe4;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;">0 ＝ OFF</div>
+        <div style="flex:1;height:70px;border-radius:12px;background:var(--actLite);color:var(--act);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;">1 ＝ ON</div>
+      </div>
+    </div>
+  </div>
+  <div class="card step" style="border-left:12px solid var(--cpu);padding:18px 34px;margin-top:20px;">
+    <p style="font-size:34px;">256段階の値を 2通りの動きにつなぐのが <b class="cC">コンピュータの判断</b>（プログラム）</p>
+  </div>
+</section>
+
+<!-- 07 実習① 明るさをはかる -->
+<section class="slide" data-title="実習① 明るさをはかる">
+  <span class="tag S">実習①</span>
+  <h2>明るさを、数字で表示しよう</h2>
+  <div class="row" style="align-items:flex-start;gap:40px;">
+    <div class="col card" style="flex:1;padding:36px;min-height:520px;display:flex;flex-direction:column;justify-content:center;">
+      <p class="sub" style="font-size:28px;margin-bottom:14px;">MakeCode（makecode.microbit.org）で組む</p>
+      <div class="blkwrap" style="gap:0;">
+        <span class="blk loop">ずっと</span>
+        <div class="blkbody b">
+          <span class="blk bas" style="font-size:40px;">数を表示 <span class="blk in2" style="font-size:36px;">明るさ</span></span>
+        </div>
+        <div class="blkfoot b"></div>
+      </div>
+      <p style="font-size:30px;margin-top:22px;">📂「数を表示」は <b>基本</b>、<br>　「明るさ」は <b>入力</b> の中</p>
+    </div>
+    <div class="col" style="flex:1;display:flex;flex-direction:column;gap:16px;">
+      <div class="steps">
+        <div class="s"><span class="num">1</span><p>振動モータは <b>P3-P0</b> につないだまま</p></div>
+        <div class="s"><span class="num">2</span><p>ブロックを組んで<b>ダウンロード</b></p></div>
+        <div class="s"><span class="num">3</span><p>表示された数字を読む<br><span class="sub" style="font-size:28px;">流れる数字は、1回最後まで見る</span></p></div>
+      </div>
+      <div class="card step" style="background:#fffaf0;border-color:#e8d7b0;padding:16px 26px;"><p style="font-size:29px;">💡 書きこんだ直後は <b>0</b> が出ることがある。<br>2回目からの数字を使おう</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 実習① 記録 -->
+<section class="slide" data-title="実習① はかって記録">
+  <span class="tag S">実習①</span>
+  <h2>いろいろな明るさを、はかって記録しよう</h2>
+  <style>#mt td{padding:12px 20px;font-size:34px;} #mt{border-spacing:0 10px;}</style>
+  <div class="row" style="align-items:flex-start;gap:40px;">
+    <div class="col" style="flex:1.15;">
+      <table class="t" id="mt">
+        <colgroup><col style="width:66%"><col style="width:34%"></colgroup>
+        <tr><th style="text-align:left;">はかる場所・ようす</th><th>明るさ</th></tr>
+        <tr><td>☀️ 机の上（そのまま）</td><td style="text-align:center;">？</td></tr>
+        <tr><td>✋ 手で表をおおう</td><td style="text-align:center;">？</td></tr>
+        <tr><td>📚 教科書を上にかぶせる</td><td style="text-align:center;">？</td></tr>
+        <tr><td>🪟 窓ぎわ・電灯の下</td><td style="text-align:center;">？</td></tr>
+      </table>
+    </div>
+    <div class="col" style="flex:.85;display:flex;flex-direction:column;gap:18px;">
+      <div class="card" style="padding:18px 26px;"><p style="font-size:31px;">ノートに<b>4つの数字</b>を書く<br><span class="sub" style="font-size:28px;">おおったまま、次の数字を読む</span></p></div>
+      <div class="card step bS" style="padding:18px 26px;"><p style="font-size:31px;">気づいたこと<br>・暗いほど数字が<b>小さい</b><br>・同じ机でも<b>班ごとに少しちがう</b></p></div>
+      <div class="card step" style="border-left:12px solid var(--warn);padding:18px 26px;"><p style="font-size:30px;">教室の明るさは日によって変わる<br>→ 数字は<b>自分ではかって</b>決める</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 09 しきい値 -->
+<section class="slide" data-title="しきい値">
+  <span class="tag C">判断</span>
+  <h2>「暗い」の<span class="mark">境目</span>を決めよう ＝ <span class="cC">しきい値</span> <span class="test">テストに出る</span></h2>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;padding-bottom:20px;">
+  <div class="numline">
+    <div class="bar"></div>
+    <span class="tick" style="left:0%;">0</span><span class="tick" style="left:100%;">255</span>
+    <span class="pin" style="left:1.2%;color:var(--sen);">✋ 3</span>
+    <span class="pin" style="left:21.6%;color:var(--sen);">☀️ 55</span>
+    <div class="th step" style="left:7.8%;"></div><span class="tick step" style="left:7.8%;color:var(--cpu);transform:translateX(-30%);">しきい値 20</span>
+  </div>
+  <p class="sub" style="font-size:26px;text-align:center;margin:-6px 0 14px;">数字は一例。自分の班ではかった値で決める</p>
+  <div class="grid2">
+    <div class="card step" style="border-left:12px solid var(--cpu);padding:20px 30px;"><p style="font-size:36px;"><b class="cC">しきい値</b>＝ ON と OFF を<br>切りかえる<b>境目の値</b><br><span class="sub" style="font-size:28px;">例：おおった3 と 机の55 の間 → <b>20</b></span></p></div>
+    <div class="card step" style="background:#fffaf0;border-color:#e8d7b0;padding:20px 30px;"><p style="font-size:31px;">🤔 しきい値を <b>50</b> にすると？<br>→ 雲が出て少し暗くなっただけで<br>　ブルブル。<b>近すぎる</b>と誤作動しやすい</p></div>
+  </div>
+  </div>
+</section>
+
+<!-- 10 フローチャート -->
+<section class="slide" data-title="フローチャート">
+  <span class="tag C">判断</span>
+  <h2>処理の流れを<span class="mark">フローチャート</span>で表す <span class="test">テストに出る</span></h2>
+  <div class="row" style="align-items:center;gap:30px;">
+    <div style="flex:none;">
+      <svg class="fc" viewBox="0 0 760 600" width="760" role="img" aria-label="フローチャート。始め、明るさをはかる、明るさがしきい値より小さいかを判断、はいならモータON、いいえならモータOFF、はかるところへもどる">
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4a5262"/></marker></defs>
+        <g stroke="#4a5262" stroke-width="5" fill="none" marker-end="url(#ah)">
+          <line x1="300" y1="80" x2="300" y2="122"/>
+          <line x1="300" y1="200" x2="300" y2="242"/>
+          <polyline points="160,320 110,320 110,428"/>
+          <polyline points="440,320 490,320 490,428"/>
+          <polyline points="110,506 110,566 690,566 690,161 442,161"/>
+        </g>
+        <line x1="490" y1="506" x2="490" y2="566" stroke="#4a5262" stroke-width="5"/>
+        <rect x="200" y="20" width="200" height="60" rx="30" fill="#fff" stroke="#4a5262" stroke-width="4"/>
+        <text x="300" y="62" font-size="32" text-anchor="middle" fill="#1f2633">始め</text>
+        <rect x="160" y="122" width="280" height="78" rx="8" fill="#dde9f8" stroke="#1f63b5" stroke-width="4"/>
+        <text x="300" y="172" font-size="32" text-anchor="middle" fill="#1f63b5">明るさをはかる</text>
+        <polygon points="300,242 440,320 300,398 160,320" fill="#ece3fa" stroke="#6b3fb0" stroke-width="4"/>
+        <text x="300" y="312" font-size="28" text-anchor="middle" fill="#6b3fb0">明るさ ＜</text>
+        <text x="300" y="346" font-size="28" text-anchor="middle" fill="#6b3fb0">しきい値？</text>
+        <text x="130" y="305" font-size="30" fill="#1d7f47">はい</text>
+        <text x="420" y="305" font-size="30" fill="#b8261b" text-anchor="start">いいえ</text>
+        <rect x="20" y="428" width="180" height="78" rx="8" fill="#fbe3d4" stroke="#c4541a" stroke-width="4"/>
+        <text x="110" y="478" font-size="30" text-anchor="middle" fill="#c4541a">モータ ON</text>
+        <rect x="400" y="428" width="180" height="78" rx="8" fill="#fff" stroke="#c4541a" stroke-width="4"/>
+        <text x="490" y="478" font-size="30" text-anchor="middle" fill="#c4541a">モータ OFF</text>
+        <text x="712" y="300" font-size="30" fill="#4a5262" writing-mode="tb">くり返す</text>
+      </svg>
+    </div>
+    <div class="col" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="card" style="padding:12px 24px;"><p style="font-size:30px;">▭ <b>処理</b>：やること</p></div>
+      <div class="card" style="padding:12px 24px;"><p style="font-size:30px;">◇ <b>判断</b>：はい／いいえで分かれる</p></div>
+      <div class="card step" style="padding:12px 24px;border-left:10px solid var(--cpu);"><p style="font-size:29px;line-height:1.45;">プログラムの3つの形<br><b>順次</b>：上から順に　<b>分岐</b>：条件で分かれる<br><b>反復</b>：くり返す</p></div>
+      <div class="card step" style="padding:12px 24px;background:#fffaf0;border-color:#e8d7b0;"><p style="font-size:29px;line-height:1.45;">✏️ <b>ノートに書こう</b><br>「<b>明るくなったら</b>動く」なら、<br>ひし形の中はどう変わる？</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 実習② プログラム -->
+<section class="slide" data-title="実習② 自動で動かす">
+  <span class="tag A">実習②</span>
+  <h2>暗くなったら、自動でブルブルさせよう</h2>
+  <div class="row" style="align-items:flex-start;gap:36px;">
+    <div class="col card" style="flex:1.15;padding:26px 30px;">
+      <div class="blkwrap" style="gap:0;">
+        <span class="blk loop">ずっと</span>
+        <div class="blkbody b">
+          <div class="blkwrap" style="gap:0;">
+            <span class="blk lg">もし <span class="blk cmp"><span class="blk in2">明るさ</span> &lt; <span class="v">20</span></span> なら</span>
+            <div class="blkbody"><span class="blk pin">デジタルで出力する 端子 <span class="v">P0</span> 値 <span class="v">1</span></span></div>
+            <span class="blk lg" style="border-radius:0;">でなければ</span>
+            <div class="blkbody"><span class="blk pin">デジタルで出力する 端子 <span class="v">P0</span> 値 <span class="v">0</span></span></div>
+            <div class="blkfoot"></div>
+          </div>
+        </div>
+        <div class="blkfoot b"></div>
+      </div>
+    </div>
+    <div class="col" style="flex:.85;display:flex;flex-direction:column;gap:14px;">
+      <div class="card" style="padding:14px 24px;"><p style="font-size:28px;line-height:1.5;">📂 どこにある？<br><b>ずっと</b>：基本<br><b>もし〜なら〜でなければ</b>：論理<br>　<span class="sub">（「もし〜なら」の ⊕ でも足せる）</span><br><b>0 &lt; 0</b>（くらべる）：論理<br><b>明るさ</b>：入力<br><b>デジタルで出力する</b>：<br>　高度なブロック → 入出力端子</p></div>
+      <div class="card step" style="padding:14px 24px;border-left:10px solid var(--warn);"><p style="font-size:28px;"><b>20</b> は例。<b>自分のしきい値</b>に変える<br>「数を表示」は<b>外す</b>（理由は次の次で）</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 シミュレーター -->
+<section class="slide" data-title="動きを予想しよう">
+  <span class="tag C">シミュレーター</span>
+  <h2>動きを予想してから、ためそう</h2>
+  <div class="sim">
+    <div class="simpanel">
+      <div class="slider"><label class="cS">☀️ 明るさ</label><input type="range" id="simL" min="0" max="255" value="55" aria-label="明るさ"><output id="simLv">55</output></div>
+      <div class="slider"><label class="cC">🎚 しきい値</label><input type="range" class="thr" id="simT" min="0" max="255" value="20" aria-label="しきい値"><output id="simTv">20</output></div>
+      <div class="modes" role="group" aria-label="条件">
+        <button id="mDark" aria-pressed="true">暗くなったら動く（&lt;）</button>
+        <button id="mBright" aria-pressed="false">明るくなったら動く（&gt;）</button>
+      </div>
+      <div class="cond" id="simCond">55 &lt; 20 ？ → いいえ</div>
+      <p style="font-size:30px;">🤔 しきい値20のとき、明るさ<b>19・20・21</b>ではそれぞれ ON？ OFF？<br><span class="sub" style="font-size:28px;">予想してから、スライダーで確かめよう</span></p>
+    </div>
+    <div class="simview" id="simView" aria-hidden="true"></div>
+    <div class="motor" id="simM"><div class="disc"></div><div class="st" id="simS">OFF</div><div class="p0" id="simP">P0 に 0</div></div>
+  </div>
+</section>
+
+<!-- 13 うまく動かないとき -->
+<section class="slide" data-title="うまく動かないとき">
+  <span class="tag W">こまったら</span>
+  <h2>うまく動かないときは、ここを見る</h2>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px;">
+    <div class="card" style="padding:18px 30px;border-left:12px solid var(--warn);"><p style="font-size:32px;">😵 <b>ずっとブルブル</b>しっぱなし → しきい値が<b>大きすぎる</b><br><span class="sub" style="font-size:28px;">明るいときの値より大きいと、いつでも「はい」になる</span></p></div>
+    <div class="card" style="padding:18px 30px;border-left:12px solid var(--warn);"><p style="font-size:32px;">😶 <b>おおっても動かない</b> → しきい値が<b>小さすぎる</b>／端子が <b>P0</b> になっているか<br><span class="sub" style="font-size:28px;">ケーブルが P3-P0 に差さっているかも見る</span></p></div>
+    <div class="card" style="padding:18px 30px;border-left:12px solid var(--warn);"><p style="font-size:32px;">🐢 <b>反応がおそい</b> → 同じ「ずっと」の中に「数を表示」が残っている<br><span class="sub" style="font-size:28px;">数字が流れ終わるまで、次の判断に進まない</span></p></div>
+    <div class="card" style="padding:18px 30px;border-left:12px solid var(--warn);"><p style="font-size:32px;">🔁 <b>&lt; と &gt; が逆</b> → 明るいときにブルブルする<br><span class="sub" style="font-size:28px;">「暗い」＝ 値が小さい ＝ 明るさ <b>&lt;</b> しきい値</span></p></div>
+  </div>
+</section>
+
+<!-- 14 チャレンジ -->
+<section class="slide" data-title="チャレンジ">
+  <span class="tag A">チャレンジ</span>
+  <h2>できた班は、プログラムを変えてみよう</h2>
+  <div class="row" style="align-items:stretch;gap:30px;">
+    <div class="col" style="flex:1;align-self:center;"><div class="illus"><img src="img/box-open.jpg" alt="箱のふたを開けると光が入り、中のマイコンが気づいてモータがふるえる"></div><p class="sub" style="font-size:28px;text-align:center;margin-top:10px;">光をはかるのは、表の<b>LED表示</b>の部分</p></div>
+    <div class="col" style="flex:1.05;display:flex;flex-direction:column;gap:16px;">
+      <div class="card bA" style="padding:16px 26px;"><p style="font-size:30px;">⭐ <b>ふたを開けたら知らせる箱</b><br>筆箱や箱に入れ、<b>明るくなったら</b>ブルブル<br><span class="sub" style="font-size:28px;">ヒント：くらべる記号を <b>&gt;</b> に。しきい値も考え直す</span></p></div>
+      <div class="card bA" style="padding:16px 26px;"><p style="font-size:30px;">⭐⭐ <b>ブッ・ブッと知らせる</b><br>暗いあいだ、ON・OFFをくり返す<br><span class="sub" style="font-size:28px;">ヒント：一時停止（ミリ秒）を使う</span></p></div>
+      <div class="card bA" style="padding:16px 26px;"><p style="font-size:30px;">⭐⭐⭐ <b>2段階で知らせる</b><br>少し暗い → 画面にアイコン<br>とても暗い → ブルブル<br><span class="sub" style="font-size:28px;">ヒント：しきい値を2つ使う</span></p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 15 考えよう：パタパタ -->
+<section class="slide" data-title="境目でパタパタ">
+  <span class="tag C">発展（時間があれば）</span>
+  <h2>境目ぎりぎりで、ブル・ピタ・ブル・ピタ…？</h2>
+  <div class="row" style="align-items:stretch;gap:36px;">
+    <div class="col card" style="padding:26px 34px;display:flex;flex-direction:column;justify-content:center;">
+      <p style="font-size:33px;line-height:1.6;">手をゆっくり近づけると、<br>明るさが <b>19・21・19・22…</b> と<br>しきい値<b>20</b>のまわりでゆれる<br>→ モータが <span class="mark">ON・OFF をくり返す</span></p>
+      <p style="font-size:33px;margin-top:20px;">街灯がこうなったら、こまるよね？</p>
+    </div>
+    <div class="col card step" style="background:#fffaf0;border-color:#e8d7b0;padding:26px 34px;display:flex;flex-direction:column;justify-content:center;">
+      <p class="sub" style="font-size:28px;">考えの例</p>
+      <p style="font-size:33px;line-height:1.6;"><b class="cC">ONにする境目</b>と<b class="cC">OFFにする境目</b>を<br><span class="mark">分ける</span><br>例：15より暗くなったら ON<br>　　30より明るくなったら OFF<br><span class="sub" style="font-size:28px;">その間は、いまの状態のまま</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- 16 片付け -->
+<section class="slide" data-title="あとかたづけ">
+  <span class="tag W">安全・あとかたづけ</span>
+  <h2>あとかたづけの約束</h2>
+  <div class="grid2" style="flex:1;align-content:center;">
+    <div class="card" style="border-left:12px solid var(--warn);"><p style="font-size:33px;">🔌 <b>USBを先に</b>抜いてから<br>ケーブルを外す</p></div>
+    <div class="card" style="border-left:12px solid var(--warn);"><p style="font-size:33px;">✋ ケーブルは<b>コネクタをつまんで</b>抜く<br><span class="sub" style="font-size:28px;">線を引っぱると中で切れる</span></p></div>
+    <div class="card" style="border-left:12px solid var(--warn);"><p style="font-size:33px;">💾 プログラムは<b>名前をつけて</b>保存<br><span class="sub" style="font-size:28px;">次回、続きから使う</span></p></div>
+    <div class="card" style="border-left:12px solid var(--warn);"><p style="font-size:33px;">📦 部品を<b>数を確かめて</b>袋にもどす</p></div>
+  </div>
+</section>
+
+<!-- 17 確認テスト -->
+<section class="slide" data-title="確認テスト">
+  <span class="tag W">確認テスト</span>
+  <h2>確認テスト <span class="sub" style="font-size:28px;margin-left:12px;">クリックで答えが1つずつ出る</span></h2>
+  <div class="qlist">
+    <div class="qr"><span class="qn">Q1</span><span>micro:bit では、表の<span class="qa step">LED</span>が光センサをかねている。</span></div>
+    <div class="qr"><span class="qn">Q2</span><span>「明るさ」ブロックの値は 0 から<span class="qa step">255</span>まで。暗いほど値は<span class="qa step">小さい</span>。</span></div>
+    <div class="qr"><span class="qn">Q3</span><span>ON と OFF を切りかえる境目の値を<span class="qa step">しきい値</span>という。</span></div>
+    <div class="qr"><span class="qn">Q4</span><span>暗くなったら動かす条件は　明るさ<span class="qa step">&lt;</span>しきい値。</span></div>
+    <div class="qr"><span class="qn">Q5</span><span>条件によって処理が分かれる形を<span class="qa step">分岐</span>という。</span></div>
+    <div class="qr"><span class="qn">Q6</span><span>同じ処理をくり返す形を<span class="qa step">反復</span>、上から順に進む形を<span class="qa step">順次</span>という。</span></div>
+    <div class="qr"><span class="qn">Q7</span><span>フローチャートで「判断」を表す図形は<span class="qa step">ひし形</span>。</span></div>
+    <div class="qr"><span class="qn">Q8</span><span>「デジタルで出力する」で出せる値は 0 と<span class="qa step">1</span>の2通り。</span></div>
+  </div>
+</section>
+
+<!-- 18 まとめ -->
+<section class="slide" data-title="まとめ">
+  <span class="tag">まとめ</span>
+  <h2>きょうわかったこと</h2>
+  <div class="flow" style="margin:20px 0 34px;">
+    <div class="f bS" style="padding:24px 14px;"><h3 class="cS">光センサ</h3><p style="font-size:32px;">明るさをはかる<br>（0〜255）</p></div><div class="arr">→</div>
+    <div class="f bC" style="padding:24px 14px;"><h3 class="cC">micro:bit</h3><p style="font-size:32px;">しきい値とくらべて<br>判断する（分岐）</p></div><div class="arr">→</div>
+    <div class="f bA" style="padding:24px 14px;"><h3 class="cA">振動モータ</h3><p style="font-size:32px;">ON（1）か<br>OFF（0）</p></div>
+  </div>
+  <div class="card" style="border-left:12px solid var(--pcb);padding:24px 38px;margin-bottom:26px;">
+    <p style="font-size:38px;">センサの値で判断させると、<span class="mark">人が操作しなくても</span>動く。<br>しきい値は<b>実際にはかって</b>決める</p>
+  </div>
+  <div class="card step" style="background:#fffaf0;border-color:#e8d7b0;padding:20px 34px;">
+    <p style="font-size:34px;line-height:1.6;">🔭 次回から：明るさ以外のセンサ（人感・土の水分・温度など）も使って、<br><b>身近な困りごと</b>を解決する装置を考える</p>
+  </div>
+</section>
+
+<!-- 19 ふりかえり -->
+<section class="slide" data-title="ふりかえり">
+  <span class="tag">ふりかえり</span>
+  <h2>「明るさ」で動く装置、だれが助かる？</h2>
+  <div class="row" style="align-items:stretch;">
+    <div class="col card" style="padding:30px 40px;display:flex;flex-direction:column;justify-content:center;">
+      <p style="font-size:38px;line-height:1.9;">① きょうできたことを<br>　◎・〇・△でふりかえる<br>② <b class="cS">明るさ</b>で動く装置を考える<br>　<span class="sub" style="font-size:30px;">だれが・いつ・どう助かる？</span></p>
+    </div>
+    <div class="col card step" style="background:#fffaf0;padding:30px 36px;display:flex;flex-direction:column;justify-content:center;">
+      <p class="sub" style="font-size:28px;">例</p>
+      <p style="font-size:38px;line-height:1.7;">部活の帰り、外が<b class="cS">暗くなったら</b><br><b class="cA">ブルブル</b>で知らせる<br>→ 練習に夢中で<br>　時間を忘れがちな<b>部員</b>が<br>　早めに帰れる</p>
+    </div>
+  </div>
+</section>
+
+</div></div>
+
+<div id="ui"><div id="bar"></div></div>
+<div id="count"></div>
+<button class="nav" id="prev" aria-label="前へ">◀</button>
+<button class="nav" id="next" aria-label="次へ">▶</button>
+<button class="nav" id="fs" aria-label="全画面">⛶</button>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const slides = [...document.querySelectorAll('.slide')];
+  const stage = $('#stage');
+  let cur = 0;
+
+  function fit(){ stage.style.transform = `scale(${Math.min(innerWidth/1600, innerHeight/900)})`; }
+  addEventListener('resize', fit); fit();
+
+  function show(i, revealAll){
+    cur = Math.max(0, Math.min(slides.length-1, i));
+    slides.forEach((s,j) => s.classList.toggle('active', j===cur));
+    slides[cur].querySelectorAll('.step').forEach(e => e.classList.toggle('shown', !!revealAll));
+    $('#bar').style.width = ((cur+1)/slides.length*100)+'%';
+    $('#count').textContent = String(cur+1).padStart(2,'0')+' / '+slides.length;
+    history.replaceState(null,'','#'+(cur+1));
+  }
+  function next(){
+    const hidden = slides[cur].querySelector('.step:not(.shown)');
+    if(hidden) hidden.classList.add('shown'); else if(cur<slides.length-1) show(cur+1);
+  }
+  function prev(){ if(cur>0) show(cur-1, true); }
+
+  addEventListener('keydown', e => {
+    if(e.target.matches('input')) return;
+    if(['ArrowRight','ArrowDown','PageDown',' ','Enter'].includes(e.key)){ e.preventDefault(); next(); }
+    else if(['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(e.key)){ e.preventDefault(); prev(); }
+    else if(e.key==='Home') show(0);
+    else if(e.key==='End') show(slides.length-1, true);
+    else if(e.key==='f'||e.key==='F') toggleFs();
+  });
+  $('#next').onclick = next; $('#prev').onclick = prev;
+  document.addEventListener('click', e => e.target.closest('button')?.blur());
+  function toggleFs(){ document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
+  $('#fs').onclick = toggleFs;
+  $('#viewport').addEventListener('click', e => {
+    if(e.target.closest('button,a,input,.sim')) return;
+    (e.clientX > innerWidth*0.3) ? next() : prev();
+  });
+  let sx=null;
+  addEventListener('touchstart', e => { sx = e.target.closest('.sim') ? null : e.touches[0].clientX; }, {passive:true});
+  addEventListener('touchend', e => {
+    if(sx===null) return; const dx = e.changedTouches[0].clientX - sx; sx=null;
+    if(Math.abs(dx)>60) dx<0 ? next() : prev();
+  });
+
+  /* シミュレーター */
+  let dark = true;
+  function sim(){
+    const L = +$('#simL').value, T = +$('#simT').value;
+    $('#simLv').textContent = L; $('#simTv').textContent = T;
+    const on = dark ? L < T : L > T;
+    const op = dark ? '&lt;' : '&gt;';
+    $('#simCond').innerHTML = `${L} ${op} ${T} ？ → <span style="color:${on?'var(--pcb)':'var(--warn)'}">${on?'はい':'いいえ'}</span>`;
+    $('#simM').classList.toggle('on', on);
+    $('#simS').textContent = on ? 'ON' : 'OFF';
+    $('#simS').style.color = on ? 'var(--act)' : 'var(--sub)';
+    $('#simP').textContent = on ? 'P0 に 1' : 'P0 に 0';
+    const g = Math.round(20 + L/255*235);
+    $('#simView').style.background = `rgb(${g},${g},${Math.round(g*.9)})`;
+    $('#simView').textContent = L < 30 ? '🌙' : (L > 150 ? '☀️' : '⛅');
+  }
+  $('#simL').oninput = sim; $('#simT').oninput = sim;
+  $('#mDark').onclick = () => { dark = true; $('#mDark').setAttribute('aria-pressed','true'); $('#mBright').setAttribute('aria-pressed','false'); sim(); };
+  $('#mBright').onclick = () => { dark = false; $('#mBright').setAttribute('aria-pressed','true'); $('#mDark').setAttribute('aria-pressed','false'); sim(); };
+  sim();
+
+  const h = parseInt(location.hash.slice(1));
+  show(h>0 ? h-1 : 0, location.search.includes('all'));   // ?all で全表示（確認用）
+})();
+</script>
+</body>
+</html>
